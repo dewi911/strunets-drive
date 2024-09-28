@@ -22,7 +22,7 @@ func (r *PostgresRepo) SaveFile(file *models.File) error {
 	return err
 }
 
-func (r *PostgresRepo) FindFile(id string) (*models.File, error) {
+func (r *PostgresRepo) GetFile(id string) (*models.File, error) {
 	var file models.File
 	err := r.db.QueryRow(`
 	SELECT id, name, path, size, username,uploaded_at
@@ -56,4 +56,16 @@ func (r *PostgresRepo) GetFileByUser(username string) ([]*models.File, error) {
 	}
 
 	return files, nil
+}
+
+func (r *PostgresRepo) GetUserByUsername(username string) (*models.User, error) {
+	var user models.User
+	err := r.db.QueryRow(`
+	SELECT id, username, password, created_at
+	FROM users WHERE username = $1
+`, username).Scan(&user.ID, &user.Username, &user.Password, &user.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
