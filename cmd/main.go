@@ -52,6 +52,17 @@ func main() {
 
 }
 
+//fileStore, err := minio.NewStore(
+//"localhost:9000",
+//"minioadmin",
+//"minioadmin",
+//"mybucket",
+//false,
+//)
+//if err != nil {
+//log.Fatal(err)
+//}
+
 //type Storage struct {
 //	mu    sync.Mutex
 //	files map[string][]byte

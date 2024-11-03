@@ -31,8 +31,16 @@ func (h *Handler) Init() *mux.Router {
 }
 
 func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
-	username := r.Context().Value("username").(string)
+	maxFileSize := int64(1024 * 1024 * 1024)
+	r.Body = http.MaxBytesReader(w, r.Body, maxFileSize)
 
+	err := r.ParseMultipartForm(32 << 20)
+	if err != nil {
+		http.Error(w, "File too large or invalid form", http.StatusBadRequest)
+		return
+	}
+
+	username := r.Context().Value("username").(string)
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -45,9 +53,9 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.service.UploadFile(username, header.Filename, file)
+	err = h.service.UploadFile(username, header.Filename, file, header.Size)
 	if err != nil {
-		http.Error(w, "failed to upload file"+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to upload file: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -67,10 +75,12 @@ func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 
 	readSeeker, filename, err := h.service.DownloadFile(fileID)
 	if err != nil {
-		http.Error(w, "failed to get files"+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to get file: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer readSeeker.Close()
+
+	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Content-Disposition", "attachment; filename="+filename)
 	w.Header().Set("Content-Type", "application/octet-stream")
 

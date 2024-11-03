@@ -7,7 +7,7 @@ import (
 )
 
 type StorageService interface {
-	UploadFile(username, filename string, content io.Reader) error
+	UploadFile(username, filename string, content io.Reader, size int64) error
 	DownloadFile(id string) (filestore.Reader, string, error)
 	ListFiles(username string) ([]*models.File, error)
 }
