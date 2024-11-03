@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strunetsdrive/pkg/database"
+	"strunetsdrive/pkg/filestore/local"
 
 	_ "github.com/lib/pq"
 	"log"
@@ -26,9 +27,13 @@ func main() {
 	}
 	defer db.Close()
 	repo := repository.NewPostgresRepo(db)
-	path := "fergerf"
+	path := "C:\\localhost\\"
 	log.Printf("repo path: %s", path)
-	service := service.NewService(repo, path)
+	fileStore, err := local.NewStore(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	service := service.NewService(repo, path, fileStore)
 	log.Println("starting server")
 	handler := rest.NewHandler(service)
 
