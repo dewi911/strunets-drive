@@ -10,3 +10,6 @@ type StorageService interface {
 	DownloadFile(id string) (io.ReadCloser, string, error)
 	ListFiles(username string) ([]*models.File, error)
 }
+
+type SessionService interface {
+}

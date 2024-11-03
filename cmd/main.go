@@ -13,12 +13,12 @@ import (
 )
 
 func main() {
-
+	fmt.Sprintf("tst")
 	db, err := database.NewPostgresConnection(database.ConnectionInfo{
 		Host:     "localhost",
 		Port:     5432,
 		Username: "postgres",
-		DBName:   "drive",
+		DBName:   "postgres",
 		SSLMode:  "disable",
 		Password: "qwerty",
 	})
@@ -26,7 +26,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
-
+	fmt.Sprintf("tst")
 	repo := repository.NewPostgresRepo(db)
 	path := "fergerf"
 	log.Printf("repo path: %s", path)
