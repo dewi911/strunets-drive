@@ -2,17 +2,16 @@ package main
 
 import (
 	"fmt"
-	"strunetsdrive/internal/config"
-	"strunetsdrive/pkg/database"
-	"strunetsdrive/pkg/filestore"
-	"strunetsdrive/pkg/filestore/minio"
-
 	_ "github.com/lib/pq"
 	"log"
 	"net/http"
+	"strunetsdrive/internal/config"
 	"strunetsdrive/internal/repository"
 	"strunetsdrive/internal/service"
 	"strunetsdrive/internal/transport/rest"
+	"strunetsdrive/pkg/database"
+	"strunetsdrive/pkg/filestore"
+	"strunetsdrive/pkg/filestore/minio"
 )
 
 func main() {
@@ -49,39 +48,37 @@ func main() {
 		}
 		log.Printf("Using MinIO storage at %s", cfg.Storage.Minio.Endpoint)
 	}
-	//} else {
-	//	fileStore, err = local.NewStore(cfg.Storage.Local.Path)
-	//	if err != nil {
-	//		log.Fatal(err)
-	//	}
-	//	log.Printf("Using local storage at %s", cfg.Storage.Local.Path)
-	//}
 
-	//path := "C:\\localhost\\"
-	//log.Printf("repo path: %s", path)
-	//fileStore, err := local.NewStore(path)
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-	//
 	service := service.NewService(repo, fileStore)
-	log.Println("starting server")
 	handler := rest.NewHandler(service)
 
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.ServerAddress),
+		Addr:    fmt.Sprintf(":%d", 8080),
 		Handler: handler.Init(),
 	}
 	log.Print("starting server on port 8080")
 
+	log.Printf("Starting server on %s", 8080)
 	if err := srv.ListenAndServe(); err != nil {
-		log.Fatal("could not listend on 8080")
+		log.Fatalf("Could not listen on %s: %v", cfg.ServerAddress, err)
 	}
-	go func() {
-
-	}()
-
 }
+
+//} else {
+//	fileStore, err = local.NewStore(cfg.Storage.Local.Path)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	log.Printf("Using local storage at %s", cfg.Storage.Local.Path)
+//}
+
+//path := "C:\\localhost\\"
+//log.Printf("repo path: %s", path)
+//fileStore, err := local.NewStore(path)
+//if err != nil {
+//	log.Fatal(err)
+//}
+//
 
 //fileStore, err := minio.NewStore(
 //"localhost:9000",
