@@ -3,12 +3,11 @@ package rest
 import (
 	"io"
 	"strunetsdrive/internal/models"
-	"strunetsdrive/pkg/filestore"
 )
 
 type StorageService interface {
-	UploadFile(username, filename string, content io.Reader, size int64) error
-	DownloadFile(id string) (filestore.Reader, string, error)
+	UploadFile(username, filename string, content io.Reader, size int64) (*models.File, error)
+	DownloadFile(id string) (io.ReadSeekCloser, *models.File, error)
 	ListFiles(username string) ([]*models.File, error)
 }
 

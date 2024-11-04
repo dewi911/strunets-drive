@@ -17,3 +17,15 @@ type File struct {
 	Username   string    `json:"username" db:"username"`
 	UploadedAt time.Time `json:"uploaded_at" db:"uploaded_at"`
 }
+
+type FileResponse struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Size        int64     `json:"size"`
+	DownloadURL string    `json:"download_url,omitempty"`
+	UploadedAt  time.Time `json:"uploaded_at"`
+}
+
+type ErrorResponse struct {
+	Error string `json:"error"`
+}

@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"strunetsdrive/internal/config"
 	"strunetsdrive/pkg/database"
-	"strunetsdrive/pkg/filestore/local"
+	"strunetsdrive/pkg/filestore"
+	"strunetsdrive/pkg/filestore/minio"
 
 	_ "github.com/lib/pq"
 	"log"
@@ -14,6 +16,11 @@ import (
 )
 
 func main() {
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	db, err := database.NewPostgresConnection(database.ConnectionInfo{
 		Host:     "localhost",
 		Port:     5432,
@@ -27,18 +34,42 @@ func main() {
 	}
 	defer db.Close()
 	repo := repository.NewPostgresRepo(db)
-	path := "C:\\localhost\\"
-	log.Printf("repo path: %s", path)
-	fileStore, err := local.NewStore(path)
-	if err != nil {
-		log.Fatal(err)
+
+	var fileStore filestore.Store
+	if cfg.Storage.Type == "minio" {
+		fileStore, err = minio.NewStore(
+			cfg.Storage.Minio.Endpoint,
+			cfg.Storage.Minio.AccessKey,
+			cfg.Storage.Minio.SecretKey,
+			cfg.Storage.Minio.Bucket,
+			cfg.Storage.Minio.UseSSL,
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Using MinIO storage at %s", cfg.Storage.Minio.Endpoint)
 	}
-	service := service.NewService(repo, path, fileStore)
+	//} else {
+	//	fileStore, err = local.NewStore(cfg.Storage.Local.Path)
+	//	if err != nil {
+	//		log.Fatal(err)
+	//	}
+	//	log.Printf("Using local storage at %s", cfg.Storage.Local.Path)
+	//}
+
+	//path := "C:\\localhost\\"
+	//log.Printf("repo path: %s", path)
+	//fileStore, err := local.NewStore(path)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//
+	service := service.NewService(repo, fileStore)
 	log.Println("starting server")
 	handler := rest.NewHandler(service)
 
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", 8080),
+		Addr:    fmt.Sprintf(":%d", cfg.ServerAddress),
 		Handler: handler.Init(),
 	}
 	log.Print("starting server on port 8080")

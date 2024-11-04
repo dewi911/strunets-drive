@@ -1,0 +1,38 @@
+COMPOSE = docker-compose
+APP_NAME = STRUNETSDRIVE
+
+.PHONY: help up down restart ps logs clean
+
+# Помощь
+help:
+	@echo "Доступные команды:"
+	@echo "  make up        - Запуск всех сервисов"
+	@echo "  make down      - Остановка всех сервисов"
+	@echo "  make restart   - Перезапуск всех сервисов"
+	@echo "  make ps        - Показать статус сервисов"
+	@echo "  make logs      - Показать логи"
+	@echo "  make clean     - Удалить все контейнеры и volumes"
+
+up:
+	@echo "Запуск сервисов..."
+	$(COMPOSE) up -d
+	@echo "Создание бакета в MinIO..."
+	@sleep 5
+	docker run --rm --network ${APP_NAME}_app-network \
+		minio/mc alias set local http://minio:9000 minioadmin minioadmin
+	docker run --rm --network ${APP_NAME}_app-network \
+		minio/mc mb local/mybucket || true
+
+down:
+	$(COMPOSE) down
+
+restart: down up
+
+ps:
+	$(COMPOSE) ps
+
+logs:
+	$(COMPOSE) logs -f
+
+clean:
+	$(COMPOSE) down -v --remove-orphans

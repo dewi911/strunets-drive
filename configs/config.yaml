@@ -1,0 +1,11 @@
+server_address: ":8080"
+storage:
+  type: "minio"
+  minio:
+    endpoint: "localhost:9000"
+    access_key: "minioadmin"
+    secret_key: "minioadmin"
+    bucket: "mybucket"
+    use_ssl: false
+  local:
+    path: "C:\\localhost\\"

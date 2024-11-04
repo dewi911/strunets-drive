@@ -131,3 +131,7 @@ func (s *MinioStore) GetPresignedURLWithParams(path string, expires time.Duratio
 	}
 	return presignedURL.String(), nil
 }
+
+func (s *MinioStore) Delete(path string) error {
+	return s.client.RemoveObject(context.Background(), s.bucketName, path, minio.RemoveObjectOptions{})
+}

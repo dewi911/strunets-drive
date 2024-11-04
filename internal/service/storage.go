@@ -10,28 +10,28 @@ import (
 )
 
 type Service struct {
-	repo        StoreRepository
-	storagePath string
-	fileStore   filestore.Store
+	repo      StoreRepository
+	fileStore filestore.Store
 }
 
-func NewService(repo StoreRepository, storagePath string, fileStore filestore.Store) *Service {
-	return &Service{repo: repo, storagePath: storagePath, fileStore: fileStore}
+func NewService(repo StoreRepository, fileStore filestore.Store) *Service {
+	return &Service{repo: repo, fileStore: fileStore}
 }
 
-func (s *Service) UploadFile(username, filename string, content io.Reader, size int64) error {
+func (s *Service) UploadFile(username, filename string, content io.Reader, size int64) (*models.File, error) {
 	id := encrypt.GenerateUUID()
-	path := encrypt.Encrypt(username + "/" + id)
+	path := fmt.Sprintf("%s/%s", username, id)
+	encryptedPath := encrypt.Encrypt(path)
 
-	writer, err := s.fileStore.Create(path)
+	writer, err := s.fileStore.Create(encryptedPath)
 	if err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
+		return nil, fmt.Errorf("failed to create file: %w", err)
 	}
 	defer writer.Close()
 
 	written, err := io.CopyN(writer, content, size)
 	if err != nil && err != io.EOF {
-		return fmt.Errorf("failed to copy file content: %w", err)
+		return nil, fmt.Errorf("failed to copy file content: %w", err)
 	}
 
 	fileInfo := &models.File{
@@ -41,24 +41,28 @@ func (s *Service) UploadFile(username, filename string, content io.Reader, size 
 		Size:     written,
 		Username: username,
 	}
+	if err := s.repo.SaveFile(fileInfo); err != nil {
+		_ = s.fileStore.Delete(encryptedPath)
+		return nil, fmt.Errorf("failed to save file info: %w", err)
+	}
 
-	return s.repo.SaveFile(fileInfo)
+	return fileInfo, nil
 }
 
-func (s *Service) DownloadFile(id string) (filestore.Reader, string, error) {
+func (s *Service) DownloadFile(id string) (io.ReadSeekCloser, *models.File, error) {
 	fileInfo, err := s.repo.GetFile(id)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, fmt.Errorf("failed to get file info: %w", err)
 	}
 
 	decryptedPath := encrypt.Decrypt(fileInfo.Path)
 
 	reader, err := s.fileStore.Open(decryptedPath)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, fmt.Errorf("failed to open file: %w", err)
 	}
 
-	return reader, fileInfo.Name, nil
+	return reader, fileInfo, nil
 }
 
 func (s *Service) ListFiles(username string) ([]*models.File, error) {
