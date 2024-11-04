@@ -1,10 +1,8 @@
 package rest
 
 import (
-	"bytes"
 	"encoding/json"
 	"github.com/gorilla/mux"
-	"io"
 	"net/http"
 	"time"
 )
@@ -33,8 +31,16 @@ func (h *Handler) Init() *mux.Router {
 }
 
 func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
-	username := r.Context().Value("username").(string)
+	maxFileSize := int64(1024 * 1024 * 1024)
+	r.Body = http.MaxBytesReader(w, r.Body, maxFileSize)
 
+	err := r.ParseMultipartForm(32 << 20)
+	if err != nil {
+		http.Error(w, "File too large or invalid form", http.StatusBadRequest)
+		return
+	}
+
+	username := r.Context().Value("username").(string)
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -42,45 +48,56 @@ func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	err = h.service.UploadFile(username, header.Filename, file)
+	if header.Size == 0 {
+		http.Error(w, "file size is zero", http.StatusBadRequest)
+		return
+	}
+
+	err = h.service.UploadFile(username, header.Filename, file, header.Size)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to upload file: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "file uploaded successfully",
+	})
 }
 
 func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
-	fileID := mux.Vars(r)["id"]
-
-	file, filename, err := h.service.DownloadFile(fileID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer file.Close()
-
-	content, err := io.ReadAll(file)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	vars := mux.Vars(r)
+	fileID := vars["id"]
+	if fileID == "" {
+		http.Error(w, "file id is empty", http.StatusBadRequest)
 		return
 	}
 
-	contentReader := bytes.NewReader(content)
+	readSeeker, filename, err := h.service.DownloadFile(fileID)
+	if err != nil {
+		http.Error(w, "failed to get file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer readSeeker.Close()
 
+	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Content-Disposition", "attachment; filename="+filename)
 	w.Header().Set("Content-Type", "application/octet-stream")
 
-	http.ServeContent(w, r, filename, time.Time{}, contentReader)
+	http.ServeContent(w, r, filename, time.Time{}, readSeeker)
 }
 
 func (h *Handler) ListFiles(w http.ResponseWriter, r *http.Request) {
 	username := r.Context().Value("username").(string)
 	files, err := h.service.ListFiles(username)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to list files"+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(files)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(files); err != nil {
+		http.Error(w, "failed to encode response: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
