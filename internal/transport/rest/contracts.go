@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"context"
 	"io"
 	"strunetsdrive/internal/models"
 )
@@ -11,5 +12,9 @@ type StorageService interface {
 	ListFiles(username string) ([]*models.File, error)
 }
 
-type SessionService interface {
+type UserService interface {
+	SingUp(ctx context.Context, input models.SignUpInput) error
+	Login(ctx context.Context, input models.LoginInput) (string, string, error)
+	ParseToken(ctx context.Context, token string) (int, int, error)
+	RefreshSession(ctx context.Context, refreshToken string) (string, string, error)
 }

@@ -3,7 +3,6 @@ APP_NAME = STRUNETSDRIVE
 
 .PHONY: help up down restart ps logs clean
 
-# Помощь
 help:
 	@echo "Доступные команды:"
 	@echo "  make up        - Запуск всех сервисов"
