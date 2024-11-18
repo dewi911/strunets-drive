@@ -24,9 +24,12 @@ func (r *Users) Create(ctx context.Context, user models.User) error {
 		"user":       user,
 	}
 
-	query := "INSERT INTO users(username, password, created_at) values ($1,$2, now())"
+	query := `
+			INSERT INTO users(username, password, created_at)
+			values ($1,$2, now())
+			RETURNING id`
 
-	_, err := r.db.ExecContext(ctx, query, user.Username, user.Password)
+	err := r.db.QueryRowContext(ctx, query, user.Username, user.Password).Scan(&user.ID)
 	if err != nil {
 		logrus.WithError(err).
 			WithFields(fields).
@@ -74,7 +77,7 @@ func (r *Users) GetByCredentials(ctx context.Context, username, password string)
 
 	var user models.User
 
-	query := "select id, username, email, password, created_at from users where email = $1 and password = $2"
+	query := "select id, username, password, created_at from users where username = $1 and password = $2"
 
 	err := r.db.QueryRowContext(ctx, query, username, password).
 		Scan(&user.ID, &user.Username, &user.Password, &user.CreatedAt)

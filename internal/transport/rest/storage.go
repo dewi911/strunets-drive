@@ -1,108 +1,118 @@
 package rest
 
 import (
-	"encoding/json"
 	"fmt"
-	"github.com/gorilla/mux"
+	"github.com/gin-gonic/gin"
 	"net/http"
 	"time"
 )
 
-type Handler struct {
+type FileHandler struct {
 	service StorageService
 }
 
-func NewHandler(service StorageService) *Handler {
-	return &Handler{
+func NewFileHandler(service StorageService) *FileHandler {
+	return &FileHandler{
 		service: service,
 	}
 }
 
-func (h *Handler) Init() *mux.Router {
-	r := mux.NewRouter()
-	files := r.PathPrefix("/files").Subrouter()
+func (h *FileHandler) InjectRoutes(r *gin.Engine, middlewares ...gin.HandlerFunc) {
+	files := r.Group("/files").Use(middlewares...)
 	{
-		files.HandleFunc("", h.UploadFile).Methods(http.MethodPost)
-		files.HandleFunc("", h.ListFiles).Methods(http.MethodGet)
-		files.HandleFunc("/{id}", h.DownloadFile).Methods(http.MethodGet)
-
+		files.POST("", h.UploadFile)
+		files.GET("", h.ListFiles)
+		files.GET("/:id", h.DownloadFile)
 	}
-
-	return r
 }
 
-func (h *Handler) UploadFile(w http.ResponseWriter, r *http.Request) {
-	maxFileSize := int64(1 << 30)
-	r.Body = http.MaxBytesReader(w, r.Body, maxFileSize)
-
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to parse form: %v", err), http.StatusBadRequest)
+func (h *FileHandler) UploadFile(c *gin.Context) {
+	username, err := GetUsernameFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get username",
+		})
 		return
 	}
-	defer r.MultipartForm.RemoveAll()
 
-	file, header, err := r.FormFile("file")
+	maxFileSize := int64(1 << 30) // 1GB
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxFileSize)
+
+	file, header, err := c.Request.FormFile("file")
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get file: %v", err), http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("Failed to get file: %v", err),
+		})
 		return
 	}
 	defer file.Close()
 
 	if header.Size == 0 {
-		http.Error(w, "File size is zero", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "File size is zero",
+		})
 		return
 	}
 
-	username := r.Context().Value("username").(string)
+	//username := c.GetString("username") // Предполагается, что username установлен в middleware
 
 	fileInfo, err := h.service.UploadFile(username, header.Filename, file, header.Size)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to upload file: %v", err), http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Sprintf("Failed to upload file: %v", err),
+		})
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	c.JSON(http.StatusCreated, gin.H{
 		"message": "File uploaded successfully",
 		"file":    fileInfo,
 	})
 }
 
-func (h *Handler) DownloadFile(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	fileID := vars["id"]
+func (h *FileHandler) DownloadFile(c *gin.Context) {
+	fileID := c.Param("id")
 	if fileID == "" {
-		http.Error(w, "File ID is required", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "File ID is required",
+		})
 		return
 	}
 
 	readSeeker, fileInfo, err := h.service.DownloadFile(fileID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get file: %v", err), http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Sprintf("Failed to get file: %v", err),
+		})
 		return
 	}
 	defer readSeeker.Close()
 
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fileInfo.Name))
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", fileInfo.Size))
-	w.Header().Set("Accept-Ranges", "bytes")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fileInfo.Name))
+	c.Header("Content-Type", "application/octet-stream")
+	c.Header("Content-Length", fmt.Sprintf("%d", fileInfo.Size))
+	c.Header("Accept-Ranges", "bytes")
 
-	http.ServeContent(w, r, fileInfo.Name, time.Time{}, readSeeker)
+	http.ServeContent(c.Writer, c.Request, fileInfo.Name, time.Time{}, readSeeker)
 }
 
-func (h *Handler) ListFiles(w http.ResponseWriter, r *http.Request) {
-	username := r.Context().Value("username").(string)
+func (h *FileHandler) ListFiles(c *gin.Context) {
+	//username := c.GetString("username") // Предполагается, что username установлен в middleware
+	username, err := GetUsernameFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get username",
+		})
+		return
+	}
 
 	files, err := h.service.ListFiles(username)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to list files: %v", err), http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Sprintf("Failed to list files: %v", err),
+		})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(files); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
-		return
-	}
+	c.JSON(http.StatusOK, files)
 }

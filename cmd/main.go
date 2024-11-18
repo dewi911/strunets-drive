@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	cors2 "github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"log"
 	"net/http"
@@ -12,6 +14,7 @@ import (
 	"strunetsdrive/pkg/database"
 	"strunetsdrive/pkg/filestore"
 	"strunetsdrive/pkg/filestore/minio"
+	"time"
 )
 
 func main() {
@@ -32,7 +35,6 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
-	repo := repository.NewPostgresRepo(db)
 
 	var fileStore filestore.Store
 	if cfg.Storage.Type == "minio" {
@@ -49,12 +51,39 @@ func main() {
 		log.Printf("Using MinIO storage at %s", cfg.Storage.Minio.Endpoint)
 	}
 
-	service := service.NewService(repo, fileStore)
-	handler := rest.NewHandler(service)
+	//init repo
+	storeRepository := repository.NewStoreRepo(db)
+	usersRepository := repository.NewUsers(db)
+	tokensRepository := repository.NewTokens(db)
+
+	//init service
+	usersService := service.NewUsers(usersRepository, tokensRepository, time.Hour*24, "testgovna")
+	storeService := service.NewStoreService(storeRepository, fileStore)
+
+	//init handlers
+	userHandler := rest.NewAuthHandler(usersService)
+	fileHandler := rest.NewFileHandler(storeService)
+
+	//service := service.NewService(repo, fileStore)
+	//handler := rest.NewHandler(service)
+
+	//init router
+	router := gin.Default()
+
+	// Add logging middleware
+	config := cors2.DefaultConfig()
+	config.AllowOrigins = []string{"http://localhost:5173"}
+	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
+	router.Use(cors2.New(config))
+	router.Use(rest.LoggingMiddleware())
+
+	// Setup routes
+	userHandler.InjectRoutes(router)
+	fileHandler.InjectRoutes(router, userHandler.AuthMiddleware())
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", 8080),
-		Handler: handler.Init(),
+		Handler: router,
 	}
 	log.Print("starting server on port 8080")
 

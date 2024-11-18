@@ -6,6 +6,6 @@ type SignUpInput struct {
 }
 
 type LoginInput struct {
-	Email    string
+	Username string
 	Password string
 }

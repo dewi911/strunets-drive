@@ -7,42 +7,42 @@ import (
 	"strunetsdrive/internal/models"
 )
 
-type Auth struct {
+type AuthHandler struct {
 	authService UserService
 }
 
-func NewAuth(authService UserService) *Auth {
-	return &Auth{authService}
+func NewAuthHandler(authService UserService) *AuthHandler {
+	return &AuthHandler{authService}
 }
 
-func (a *Auth) InjectRoutes(r *gin.Engine, middlewares ...gin.HandlerFunc) {
+func (a *AuthHandler) InjectRoutes(r *gin.Engine, middlewares ...gin.HandlerFunc) {
 	auth := r.Group("/auth").Use(middlewares...)
 	{
 		auth.POST("/sign-up", a.signUp)
-		auth.POST("/sign-in", a.login)
+		auth.POST("/login", a.login)
 		auth.GET("/refresh", a.refresh)
 	}
 
 }
 
-func (a *Auth) signUp(ctx *gin.Context) {
+func (a *AuthHandler) signUp(ctx *gin.Context) {
 	var input models.SignUpInput
 
 	if err := ctx.ShouldBindJSON(&input); err != nil {
-		ctx.AbortWithStatusJSON(http.StatusBadRequest, NewBadRequestError("validation request body error", err))
+		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	err := a.authService.SingUp(ctx, input)
 	if err != nil {
-		ctx.AbortWithStatusJSON(http.StatusInternalServerError, NewInternalServerError("signing up error", err))
+		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	ctx.JSON(http.StatusOK, input)
+	ctx.JSON(http.StatusOK, gin.H{"message": "User successfully registered"})
 }
 
-func (a *Auth) login(ctx *gin.Context) {
+func (a *AuthHandler) login(ctx *gin.Context) {
 	var inp models.LoginInput
 	if err := ctx.ShouldBindJSON(&inp); err != nil {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, NewBadRequestError("validation request body error", err))
@@ -52,11 +52,11 @@ func (a *Auth) login(ctx *gin.Context) {
 	accessToken, refreshToken, err := a.authService.Login(ctx, inp)
 	if err != nil {
 		if errors.Is(err, errors.New("user with such credentials not found")) { //TODO REPLACE ERROR.new TO CONST
-			ctx.AbortWithStatusJSON(http.StatusNotFound, NewNotFoundError("user not found", err))
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 			return
 		}
 
-		ctx.AbortWithStatusJSON(http.StatusInternalServerError, NewInternalServerError("signing in error", err))
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
@@ -67,7 +67,7 @@ func (a *Auth) login(ctx *gin.Context) {
 	})
 }
 
-func (a *Auth) refresh(ctx *gin.Context) {
+func (a *AuthHandler) refresh(ctx *gin.Context) {
 	cookie, err := ctx.Cookie("refresh-token")
 	if err != nil {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, NewBadRequestError("get cookie from request error", err))

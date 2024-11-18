@@ -6,23 +6,23 @@ import (
 	"time"
 )
 
-type PostgresRepo struct {
+type StoreRepo struct {
 	db *sqlx.DB
 }
 
-func NewPostgresRepo(db *sqlx.DB) *PostgresRepo {
-	return &PostgresRepo{db}
+func NewStoreRepo(db *sqlx.DB) *StoreRepo {
+	return &StoreRepo{db}
 }
 
-func (r *PostgresRepo) SaveFile(file *models.File) error {
+func (r *StoreRepo) SaveFile(file *models.File) error {
 	_, err := r.db.Exec(`
 	INSERT INTO files (id, name, path, size, username, uploaded_at)
-	Values ($1, $2, $3, $4, $5)
+	Values ($1, $2, $3, $4, $5, $6)
 `, file.ID, file.Name, file.Path, file.Size, file.Username, time.Now())
 	return err
 }
 
-func (r *PostgresRepo) GetFile(id string) (*models.File, error) {
+func (r *StoreRepo) GetFile(id string) (*models.File, error) {
 	var file models.File
 	err := r.db.QueryRow(`
 	SELECT id, name, path, size, username,uploaded_at
@@ -35,7 +35,7 @@ func (r *PostgresRepo) GetFile(id string) (*models.File, error) {
 	return &file, nil
 }
 
-func (r *PostgresRepo) GetFileByUser(username string) ([]*models.File, error) {
+func (r *StoreRepo) GetFileByUser(username string) ([]*models.File, error) {
 	rows, err := r.db.Query(`
 	SELECT id, name, size, uploaded_at
 	FROM files WHERE username = $1
@@ -58,7 +58,7 @@ func (r *PostgresRepo) GetFileByUser(username string) ([]*models.File, error) {
 	return files, nil
 }
 
-func (r *PostgresRepo) GetUserByUsername(username string) (*models.User, error) {
+func (r *StoreRepo) GetUserByUsername(username string) (*models.User, error) {
 	var user models.User
 	err := r.db.QueryRow(`
 	SELECT id, username, password, created_at

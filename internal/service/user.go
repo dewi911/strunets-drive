@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"strunetsdrive/internal/models"
-	"strunetsdrive/pkg/encrypt"
 	"time"
 )
 
@@ -18,13 +17,15 @@ type User struct {
 	userRepo    UserRepository
 	sessionRepo SessionRepository
 	tokenTtl    time.Duration
+	jwtSecret   []byte
 }
 
-func NewUsers(userRepo UserRepository, sessionRepo SessionRepository, tokenTtl time.Duration) *User {
+func NewUsers(userRepo UserRepository, sessionRepo SessionRepository, tokenTtl time.Duration, jwtSecret string) *User {
 	return &User{
 		userRepo:    userRepo,
 		sessionRepo: sessionRepo,
 		tokenTtl:    tokenTtl,
+		jwtSecret:   []byte(jwtSecret),
 	}
 }
 
@@ -38,11 +39,11 @@ func (s *User) SingUp(ctx context.Context, input models.SignUpInput) error {
 		return errors.New("user already exists error")
 	}
 
-	password := encrypt.Encrypt(input.Password) //TODO password err adding
+	//password := encrypt.Encrypt(input.Password) //TODO password err adding
 
 	user := models.User{
 		Username: input.Username,
-		Password: password,
+		Password: input.Password,
 	}
 
 	err = s.userRepo.Create(ctx, user)
@@ -54,10 +55,10 @@ func (s *User) SingUp(ctx context.Context, input models.SignUpInput) error {
 }
 
 func (s *User) Login(ctx context.Context, input models.LoginInput) (string, string, error) {
-	password := encrypt.Encrypt(input.Password)
+	//password := encrypt.Encrypt(input.Password)
 	//TODO password if err and pass hasher
 
-	user, err := s.userRepo.GetByCredentials(ctx, input.Email, password)
+	user, err := s.userRepo.GetByCredentials(ctx, input.Username, input.Password)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", "", errors.Wrap(err, "getting user by credential error") //TODO add constan err
@@ -96,58 +97,58 @@ func (s *User) RefreshSession(ctx context.Context, refreshToken string) (string,
 	return accessToken, refreshToken, nil
 }
 
-func (s *User) ParseToken(_ context.Context, token string) (int, int, error) {
+func (s *User) ParseToken(_ context.Context, token string) (int, string, error) {
 	t, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.Wrapf(nil, "unexpecting signing method %v", token.Header["alg"])
 		}
-		return "salt", nil //TODO ADD SECRET CONST
+		return s.jwtSecret, nil //TODO ADD SECRET CONST
 	})
 
 	if err != nil {
-		return 0, 0, errors.Wrap(err, "jwt parsing error")
+		return 0, "0", errors.Wrap(err, "jwt parsing error")
 	}
 
 	if !t.Valid {
-		return 0, 0, errors.Wrap(nil, "invalid token error")
+		return 0, "0", errors.Wrap(nil, "invalid token error")
 	}
 
 	claims, ok := t.Claims.(jwt.MapClaims)
 	if !ok {
-		return 0, 0, errors.Wrap(nil, "invalid claims error")
+		return 0, "0", errors.Wrap(nil, "invalid claims error")
 	}
 
 	subject, ok := claims["sub"].(string)
 	if !ok {
-		return 0, 0, errors.Wrap(nil, "invalid subject error")
+		return 0, "0", errors.Wrap(nil, "invalid subject error")
 	}
 
 	subjectParts := strings.Split(subject, ":")
 	if len(subjectParts) != 2 {
-		return 0, 0, errors.Wrap(nil, "token subject content error")
+		return 0, "0", errors.Wrap(nil, "token subject content error")
 	}
 
 	userID, err := strconv.Atoi(subjectParts[0])
 	if err != nil {
-		return 0, 0, errors.Wrap(err, "invalid userID in from token subject")
+		return 0, "0", errors.Wrap(err, "invalid userID in from token subject")
 	}
 
-	roleID, err := strconv.Atoi(subjectParts[1])
-	if err != nil {
-		return 0, 0, errors.Wrap(err, "invalid userID in from token subject error")
-	}
+	//username, err := strconv.Itoa(subjectParts[1])
+	//if err != nil {
+	//	return 0, "0", errors.Wrap(err, "invalid userID in from token subject error")
+	//}
 
-	return userID, roleID, nil
+	return userID, subjectParts[1], nil
 }
 
 func (s *User) generateTokens(ctx context.Context, user models.User) (string, string, error) {
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
-		Subject:   fmt.Sprintf("%d:%d", user.ID),
+		Subject:   fmt.Sprintf("%d:%s", user.ID, user.Username),
 		IssuedAt:  jwt.NewNumericDate(time.Now()),
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.tokenTtl)),
 	})
 
-	accessToken, err := t.SignedString("salt") //TODO add salt const
+	accessToken, err := t.SignedString(s.jwtSecret) //TODO add salt const
 	if err != nil {
 		return "", "", errors.Wrap(err, "creating and returning a complete, signed JWT token error")
 	}
