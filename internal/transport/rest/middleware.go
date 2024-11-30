@@ -12,7 +12,7 @@ import (
 const (
 	ctxUserIDKey     = "user-id"
 	ctxUserRoleIDKey = "user-role-id"
-	ctxUsernameKey   = "username" // Добавляем новую константу
+	ctxUsernameKey   = "username"
 )
 const AuthorizationHeaderName = "Authorization"
 
@@ -42,7 +42,6 @@ func (a *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Обновляем сигнатуру метода ParseToken для получения username
 		userID, username, err := a.authService.ParseToken(c, token)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, NewUnauthorizedError("wrong authorization token", err))
@@ -51,13 +50,12 @@ func (a *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 
 		c.Set(ctxUserIDKey, userID)
 		//c.Set(ctxUserRoleIDKey, roleID)
-		c.Set(ctxUsernameKey, username) // Устанавливаем username в контекст
+		c.Set(ctxUsernameKey, username)
 
 		c.Next()
 	}
 }
 
-// Вспомогательная функция для получения username из контекста
 func GetUsernameFromContext(c *gin.Context) (string, error) {
 	username, exists := c.Get(ctxUsernameKey)
 	if !exists {
