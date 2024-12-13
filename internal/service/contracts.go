@@ -14,6 +14,10 @@ type UserRepository interface {
 
 type StoreRepository interface {
 	SaveFile(file *models.File) error
+	DeleteFile(fileID string) error
+	SaveFolder(folder *models.Folder) error
+	GetRootFolder(username string) (*models.Folder, error)
+	GetFolderContent(folderID string) (*models.Folder, error)
 	GetFile(id string) (*models.File, error)
 	GetFileByUser(username string) ([]*models.File, error)
 	GetUserByUsername(username string) (*models.User, error)

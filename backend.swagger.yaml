@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: File Storage API
-  description: API for managing file storage and authentication
+  description: API for managing file storage, authentication, and file operations
   version: 1.0.0
 servers:
   - url: http://localhost:8080
@@ -68,15 +68,58 @@ components:
           type: integer
           format: int64
           example: 1048576
+        path:
+          type: string
+          example: "/user/documents/document.pdf"
         createdAt:
           type: string
           format: date-time
-        updatedAt:
+        uploadedAt:
           type: string
           format: date-time
-        owner:
+        folderId:
+          type: string
+          example: "folder-uuid-123"
+        isDir:
+          type: boolean
+          example: false
+
+    FolderInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "folder-uuid-123"
+        name:
+          type: string
+          example: "Documents"
+        parentId:
+          type: string
+          example: "parent-folder-uuid"
+        createdAt:
+          type: string
+          format: date-time
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileInfo'
+        subfolders:
+          type: array
+          items:
+            $ref: '#/components/schemas/FolderInfo'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        username:
           type: string
           example: "john.doe"
+        createdAt:
+          type: string
+          format: date-time
 
 paths:
   /auth/sign-up:
@@ -177,6 +220,9 @@ paths:
                 file:
                   type: string
                   format: binary
+                folderID:
+                  type: string
+                  description: Optional folder ID to upload file to
       responses:
         '201':
           description: File uploaded successfully
@@ -247,6 +293,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+    put:
+      tags:
+        - Files
+      summary: Update file metadata
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: New file name
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: Optional tags for the file
+      responses:
+        '200':
+          description: File metadata updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileInfo'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
     delete:
       tags:
         - Files
@@ -290,6 +376,15 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                newFileName:
+                  type: string
+                  description: Optional new file name for the copied file
       responses:
         '200':
           description: File copied successfully
@@ -311,6 +406,15 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                destinationPath:
+                  type: string
+                  description: Destination path or folder ID
       responses:
         '200':
           description: File moved successfully
@@ -339,3 +443,73 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FileInfo'
+
+  /folders:
+    post:
+      tags:
+        - Folders
+      summary: Create a new folder
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Folder name
+                parentId:
+                  type: string
+                  description: Optional parent folder ID
+      responses:
+        '201':
+          description: Folder created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderInfo'
+
+  /folders/{id}:
+    get:
+      tags:
+        - Folders
+      summary: Get folder contents
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Folder contents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderInfo'
+
+  /folders/{id}/download:
+    get:
+      tags:
+        - Folders
+      summary: Download folder as ZIP
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Folder downloaded as ZIP
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
