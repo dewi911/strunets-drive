@@ -21,6 +21,8 @@ type StoreRepository interface {
 	GetFile(id string) (*models.File, error)
 	GetFileByUser(username string) ([]*models.File, error)
 	GetUserByUsername(username string) (*models.User, error)
+	GetCompleteHierarchy(username string) ([]*models.Folder, error)
+	GetFolderHierarchy(username string) ([]*models.Folder, error)
 }
 type SessionRepository interface {
 	Create(ctx context.Context, token models.RefreshSession) error

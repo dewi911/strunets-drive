@@ -189,6 +189,45 @@ func (s *StoreService) DownloadFolderAsZip(folderID string) (io.ReadSeekCloser, 
 	return &bufferReadSeekCloser{bytes.NewReader(zipBuffer.Bytes())}, nil
 }
 
+func (s *StoreService) ListFiles(username string) ([]*models.File, error) {
+	return s.repo.GetFileByUser(username)
+}
+
+func (s *StoreService) GetFileDownloadURL(fileID string) (string, error) {
+	fileInfo, err := s.repo.GetFile(fileID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get file info: %w", err)
+	}
+
+	//decryptedPath := encrypt.Decrypt(fileInfo.Path)
+
+	url, err := s.fileStore.(interface {
+		GetPresignedURL(string, time.Duration) (string, error)
+	}).
+		GetPresignedURL(fileInfo.Path, time.Hour)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate download URL: %w", err)
+	}
+
+	return url, nil
+}
+
+func (s *StoreService) GetFolderContent(id, username string) (*models.Folder, error) {
+	if id == "" {
+		rootFolder, err := s.repo.GetRootFolder(username)
+		if err != nil {
+			return nil, err
+		}
+		id = rootFolder.ID
+	}
+
+	return s.repo.GetFolderContent(id)
+}
+
+func (s *StoreService) GetRootFolder(username string) (*models.Folder, error) {
+	return s.repo.GetRootFolder(username)
+}
+
 func (s *StoreService) DownloadFile(id string) (io.ReadSeekCloser, *models.File, error) {
 	fileInfo, err := s.repo.GetFile(id)
 	if err != nil {
@@ -226,33 +265,10 @@ func (s *StoreService) DeleteFile(username, fileID string) error {
 	return nil
 }
 
-func (s *StoreService) ListFiles(username string) ([]*models.File, error) {
-	return s.repo.GetFileByUser(username)
+func (s *StoreService) GetFolderHierarchy(username string) ([]*models.Folder, error) {
+	return s.repo.GetFolderHierarchy(username)
 }
 
-func (s *StoreService) GetFileDownloadURL(fileID string) (string, error) {
-	fileInfo, err := s.repo.GetFile(fileID)
-	if err != nil {
-		return "", fmt.Errorf("failed to get file info: %w", err)
-	}
-
-	//decryptedPath := encrypt.Decrypt(fileInfo.Path)
-
-	url, err := s.fileStore.(interface {
-		GetPresignedURL(string, time.Duration) (string, error)
-	}).
-		GetPresignedURL(fileInfo.Path, time.Hour)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate download URL: %w", err)
-	}
-
-	return url, nil
-}
-
-func (s *StoreService) GetFolderContent(id string) (*models.Folder, error) {
-	return s.repo.GetFolderContent(id)
-}
-
-func (s *StoreService) GetRootFolder(username string) (*models.Folder, error) {
-	return s.repo.GetRootFolder(username)
+func (s *StoreService) GetCompleteHierarchy(username string) ([]*models.Folder, error) {
+	return s.repo.GetCompleteHierarchy(username)
 }

@@ -39,72 +39,53 @@ func (h *FileHandler) InjectRoutes(r *gin.Engine, middlewares ...gin.HandlerFunc
 	folders := r.Group("/folders").Use(middlewares...)
 	{
 		folders.POST("", h.CreateFolder)
+		folders.GET("", h.GetFolderContent)
 		folders.GET("/:id", h.GetFolderContent)
 		folders.GET("/:id/download", h.DownloadFolder)
+		folders.GET("/hierarchy", h.GetFolderHierarchy)
+		folders.GET("/complete", h.GetCompleteHierarchy)
 	}
 }
 
-func (h *FileHandler) CreateFolder(c *gin.Context) {
+func (h *FileHandler) ListFiles(c *gin.Context) {
+	//username := c.GetString("username")
 	username, err := GetUsernameFromContext(c)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get username"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get username",
+		})
 		return
 	}
 
-	var folderInput struct {
-		Name     string `json:"name"`
-		ParentID string `json:"parent_id,omitempty"`
-	}
-
-	if err := c.ShouldBindJSON(&folderInput); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	folder, err := h.service.CreateFolder(username, folderInput.Name, folderInput.ParentID)
+	files, err := h.service.ListFiles(username)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Sprintf("Failed to list files: %v", err),
+		})
 		return
 	}
 
-	c.JSON(http.StatusCreated, folder)
+	c.JSON(http.StatusOK, files)
 }
 
 func (h *FileHandler) GetFolderContent(c *gin.Context) {
+	username, err := GetUsernameFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get username",
+		})
+		return
+	}
+
 	folderID := c.Param("id")
 
-	folderContent, err := h.service.GetFolderContent(folderID)
+	folderContent, err := h.service.GetFolderContent(folderID, username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, folderContent)
-}
-
-func (h *FileHandler) DownloadFolder(c *gin.Context) {
-	folderID := c.Param("id")
-
-	zipReader, err := h.service.DownloadFolderAsZip(folderID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	defer zipReader.Close()
-
-	folderContent, err := h.service.GetFolderContent(folderID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.Header("Content-Type", "application/zip")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.zip\"", folderContent.Name))
-
-	c.Stream(func(w io.Writer) bool {
-		_, err := io.Copy(w, zipReader)
-		return err == nil
-	})
 }
 
 func (h *FileHandler) UploadFolderStructure(c *gin.Context) {
@@ -275,6 +256,65 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 	})
 }
 
+func (h *FileHandler) DownloadFolder(c *gin.Context) {
+	username, err := GetUsernameFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get username",
+		})
+		return
+	}
+
+	folderID := c.Param("id")
+
+	zipReader, err := h.service.DownloadFolderAsZip(folderID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer zipReader.Close()
+
+	folderContent, err := h.service.GetFolderContent(folderID, username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.zip\"", folderContent.Name))
+
+	c.Stream(func(w io.Writer) bool {
+		_, err := io.Copy(w, zipReader)
+		return err == nil
+	})
+}
+
+func (h *FileHandler) CreateFolder(c *gin.Context) {
+	username, err := GetUsernameFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get username"})
+		return
+	}
+
+	var folderInput struct {
+		Name     string `json:"name"`
+		ParentID string `json:"parent_id,omitempty"`
+	}
+
+	if err := c.ShouldBindJSON(&folderInput); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	folder, err := h.service.CreateFolder(username, folderInput.Name, folderInput.ParentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, folder)
+}
+
 func (h *FileHandler) DownloadFile(c *gin.Context) {
 	fileID := c.Param("id")
 	if fileID == "" {
@@ -301,26 +341,6 @@ func (h *FileHandler) DownloadFile(c *gin.Context) {
 	http.ServeContent(c.Writer, c.Request, fileInfo.Name, time.Time{}, readSeeker)
 }
 
-func (h *FileHandler) ListFiles(c *gin.Context) {
-	//username := c.GetString("username")
-	username, err := GetUsernameFromContext(c)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to get username",
-		})
-		return
-	}
-
-	files, err := h.service.ListFiles(username)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("Failed to list files: %v", err),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, files)
-}
 func (h *FileHandler) DeleteFile(c *gin.Context) {
 	username, err := GetUsernameFromContext(c)
 	if err != nil {
@@ -340,6 +360,46 @@ func (h *FileHandler) DeleteFile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "File deleted successfully"})
+}
+
+func (h *FileHandler) GetFolderHierarchy(c *gin.Context) {
+	username, err := GetUsernameFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get username",
+		})
+		return
+	}
+
+	hierarchy, err := h.service.GetFolderHierarchy(username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Sprintf("Failed to get folder hierarchy: %v", err),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, hierarchy)
+}
+
+func (h *FileHandler) GetCompleteHierarchy(c *gin.Context) {
+	username, err := GetUsernameFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get username",
+		})
+		return
+	}
+
+	hierarchy, err := h.service.GetCompleteHierarchy(username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Sprintf("Failed to get complete hierarchy: %v", err),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, hierarchy)
 }
 
 func (h *FileHandler) CopyFile(c *gin.Context) {

@@ -15,8 +15,10 @@ type StorageService interface {
 	DeleteFile(username, fileID string) error
 	ListFiles(username string) ([]*models.File, error)
 	GetFileDownloadURL(fileID string) (string, error)
-	GetFolderContent(id string) (*models.Folder, error)
+	GetFolderContent(id, username string) (*models.Folder, error)
 	GetRootFolder(username string) (*models.Folder, error)
+	GetCompleteHierarchy(username string) ([]*models.Folder, error)
+	GetFolderHierarchy(username string) ([]*models.Folder, error)
 }
 
 type UserService interface {

@@ -28,6 +28,7 @@ type Folder struct {
 	ParentID  string    `db:"parent_id"`
 	Username  string    `db:"username"`
 	CreatedAt time.Time `db:"created_at"`
+	PathArray []string  `db:"path_array"`
 	Files     []*File   `db:"-"`
 	Folders   []*Folder `db:"-"`
 }

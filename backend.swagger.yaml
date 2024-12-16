@@ -55,36 +55,36 @@ components:
           format: email
           example: "john@example.com"
 
-    FileInfo:
+    File:
       type: object
       properties:
         id:
           type: string
-          example: "123e4567-e89b-12d3-a456-426614174000"
+          example: "edd2013f-3a5a-474c-b239-143e29e5ef4f"
         name:
           type: string
           example: "document.pdf"
+        path:
+          type: string
+          example: "username/folder-id/file-id"
         size:
           type: integer
           format: int64
           example: 1048576
-        path:
+        username:
           type: string
-          example: "/user/documents/document.pdf"
-        createdAt:
-          type: string
-          format: date-time
+          example: "john.doe"
         uploadedAt:
           type: string
           format: date-time
-        folderId:
-          type: string
-          example: "folder-uuid-123"
         isDir:
           type: boolean
           example: false
+        folderId:
+          type: string
+          example: "folder-uuid-123"
 
-    FolderInfo:
+    Folder:
       type: object
       properties:
         id:
@@ -96,17 +96,24 @@ components:
         parentId:
           type: string
           example: "parent-folder-uuid"
+        username:
+          type: string
+          example: "john.doe"
         createdAt:
           type: string
           format: date-time
+        pathArray:
+          type: array
+          items:
+            type: string
         files:
           type: array
           items:
-            $ref: '#/components/schemas/FileInfo'
-        subfolders:
+            $ref: '#/components/schemas/File'
+        folders:
           type: array
           items:
-            $ref: '#/components/schemas/FolderInfo'
+            $ref: '#/components/schemas/Folder'
 
     User:
       type: object
@@ -235,7 +242,7 @@ paths:
                     type: string
                     example: "File uploaded successfully"
                   file:
-                    $ref: '#/components/schemas/FileInfo'
+                    $ref: '#/components/schemas/File'
         '400':
           description: Bad request
           content:
@@ -257,7 +264,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/FileInfo'
+                  $ref: '#/components/schemas/File'
         '500':
           description: Internal server error
           content:
@@ -325,7 +332,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FileInfo'
+                $ref: '#/components/schemas/File'
         '500':
           description: Internal server error
           content:
@@ -391,7 +398,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FileInfo'
+                $ref: '#/components/schemas/File'
 
   /files/{id}/move:
     put:
@@ -421,7 +428,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FileInfo'
+                $ref: '#/components/schemas/File'
 
   /files/{id}/info:
     get:
@@ -442,7 +449,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FileInfo'
+                $ref: '#/components/schemas/File'
 
   /folders:
     post:
@@ -469,7 +476,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FolderInfo'
+                $ref: '#/components/schemas/Folder'
 
   /folders/{id}:
     get:
@@ -490,7 +497,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FolderInfo'
+                $ref: '#/components/schemas/Folder'
 
   /folders/{id}/download:
     get:
@@ -513,3 +520,103 @@ paths:
               schema:
                 type: string
                 format: binary
+
+  /folders/hierarchy:
+    get:
+      tags:
+        - Folders
+      summary: Get user's folder hierarchy
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Folder hierarchy retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Folder'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /folders/complete:
+    get:
+      tags:
+        - Folders
+      summary: Get complete folder and file hierarchy for the user
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Complete hierarchy retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Folder'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /folders/upload-structure:
+    post:
+      tags:
+        - Folders
+      summary: Upload multiple files with nested folder structure
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                parent_folder_id:
+                  type: string
+                  description: Optional parent folder ID for upload
+      responses:
+        '201':
+          description: Files uploaded with nested folder structure
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploaded_files:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/File'
+                  errors:
+                    type: array
+                    items:
+                      type: string
+        '206':
+          description: Partial content - some files uploaded with errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploaded_files:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/File'
+                  errors:
+                    type: array
+                    items:
+                      type: string
