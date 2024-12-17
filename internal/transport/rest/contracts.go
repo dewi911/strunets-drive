@@ -11,6 +11,7 @@ type StorageService interface {
 	UploadFile(username, filename string, content io.Reader, size int64, folderID string) (*models.File, error)
 	DownloadFilesAsZip(username string) (io.ReadSeekCloser, error)
 	DownloadFolderAsZip(folderID string) (io.ReadSeekCloser, error)
+	DownloadSelectedFilesAsZip(username string, fileIDs []string) (io.ReadSeekCloser, error)
 	DownloadFile(id string) (io.ReadSeekCloser, *models.File, error)
 	DeleteFile(username, fileID string) error
 	ListFiles(username string) ([]*models.File, error)

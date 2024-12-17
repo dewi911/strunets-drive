@@ -19,6 +19,10 @@ type FileResponse struct {
 	FolderID    string    `json:"folder_id,omitempty"`
 }
 
+type FileIDsRequest struct {
+	FileIDs []string `json:"file_ids"`
+}
+
 type ErrorResponse struct {
 	Error string `json:"error"`
 }

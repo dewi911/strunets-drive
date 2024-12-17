@@ -26,6 +26,8 @@ func (h *FileHandler) InjectRoutes(r *gin.Engine, middlewares ...gin.HandlerFunc
 		files.POST("", h.UploadFile)
 		files.GET("", h.ListFiles)
 		files.GET("/:id", h.DownloadFile)
+		files.GET("/download", h.DownloadAllFilesAsZip)
+		files.POST("/download/selected", h.DownloadSelectedFiles)
 	}
 	{
 
@@ -256,6 +258,62 @@ func (h *FileHandler) UploadFile(c *gin.Context) {
 	})
 }
 
+func (h *FileHandler) DownloadSelectedFiles(c *gin.Context) {
+	username, err := GetUsernameFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get username",
+		})
+		return
+	}
+
+	var request models.FileIDsRequest
+	if err := c.BindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	zipReader, err := h.service.DownloadSelectedFilesAsZip(username, request.FileIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer zipReader.Close()
+
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", "attachment; filename=\"selected_files.zip\"")
+
+	_, err = io.Copy(c.Writer, zipReader)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send files"})
+	}
+}
+
+func (h *FileHandler) DownloadAllFilesAsZip(c *gin.Context) {
+	username, err := GetUsernameFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get username",
+		})
+		return
+	}
+
+	zipReader, err := h.service.DownloadFilesAsZip(username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer zipReader.Close()
+
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s_files.zip\"", username))
+
+	_, err = io.Copy(c.Writer, zipReader)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send files"})
+	}
+}
+
 func (h *FileHandler) DownloadFolder(c *gin.Context) {
 	username, err := GetUsernameFromContext(c)
 	if err != nil {
@@ -283,10 +341,11 @@ func (h *FileHandler) DownloadFolder(c *gin.Context) {
 	c.Header("Content-Type", "application/zip")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.zip\"", folderContent.Name))
 
-	c.Stream(func(w io.Writer) bool {
-		_, err := io.Copy(w, zipReader)
-		return err == nil
-	})
+	_, err = io.Copy(c.Writer, zipReader)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send file"})
+		return
+	}
 }
 
 func (h *FileHandler) CreateFolder(c *gin.Context) {

@@ -20,6 +20,7 @@ type StoreRepository interface {
 	GetFolderContent(folderID string) (*models.Folder, error)
 	GetFile(id string) (*models.File, error)
 	GetFileByUser(username string) ([]*models.File, error)
+	GetFileById(fileID, username string) (*models.File, error)
 	GetUserByUsername(username string) (*models.User, error)
 	GetCompleteHierarchy(username string) ([]*models.Folder, error)
 	GetFolderHierarchy(username string) ([]*models.Folder, error)

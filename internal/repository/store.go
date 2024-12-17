@@ -186,6 +186,27 @@ func (r *StoreRepo) SaveFile(file *models.File) error {
 	return err
 }
 
+func (r *StoreRepo) GetFileById(fileID, username string) (*models.File, error) {
+	file := &models.File{}
+	err := r.db.QueryRow(`
+        SELECT id, name, path, size, username, uploaded_at, is_dir
+        FROM files 
+        WHERE id = $1 AND username = $2 AND is_dir = false
+    `, fileID, username).Scan(
+		&file.ID,
+		&file.Name,
+		&file.Path,
+		&file.Size,
+		&file.Username,
+		&file.UploadedAt,
+		&file.IsDir,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return file, nil
+}
+
 func (r *StoreRepo) SaveFolder(folder *models.Folder) error {
 	var parentPathArray []string
 	err := r.db.QueryRow(`

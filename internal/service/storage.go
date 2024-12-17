@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"io"
 	"path/filepath"
 	"strunetsdrive/internal/models"
@@ -129,6 +130,41 @@ func (s *StoreService) DownloadFilesAsZip(username string) (io.ReadSeekCloser, e
 	return &bufferReadSeekCloser{bytes.NewReader(zipBuffer.Bytes())}, nil
 }
 
+func (s *StoreService) DownloadSelectedFilesAsZip(username string, fileIDs []string) (io.ReadSeekCloser, error) {
+	zipBuffer := new(bytes.Buffer)
+	zipWriter := zip.NewWriter(zipBuffer)
+
+	for _, fileID := range fileIDs {
+		file, err := s.repo.GetFileById(fileID, username)
+		if err != nil {
+			return nil, err
+		}
+
+		reader, _, err := s.DownloadFile(file.ID)
+		if err != nil {
+			return nil, err
+		}
+		defer reader.Close()
+
+		zipFile, err := zipWriter.Create(file.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = io.Copy(zipFile, reader)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err := zipWriter.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return &bufferReadSeekCloser{bytes.NewReader(zipBuffer.Bytes())}, nil
+}
+
 func (s *StoreService) DownloadFolderAsZip(folderID string) (io.ReadSeekCloser, error) {
 	folderContent, err := s.repo.GetFolderContent(folderID)
 	if err != nil {
@@ -138,9 +174,17 @@ func (s *StoreService) DownloadFolderAsZip(folderID string) (io.ReadSeekCloser, 
 	zipBuffer := new(bytes.Buffer)
 	zipWriter := zip.NewWriter(zipBuffer)
 
+	processedFolders := make(map[string]bool)
+
 	var addToZip func(folder *models.Folder, basePath string) error
 	addToZip = func(folder *models.Folder, basePath string) error {
+		if processedFolders[folder.ID] {
+			return nil
+		}
+		processedFolders[folder.ID] = true
+
 		for _, file := range folder.Files {
+			logrus.WithField("fileID", file.ID).Debug("Adding file to zip")
 			reader, _, err := s.DownloadFile(file.ID)
 			if err != nil {
 				return err
